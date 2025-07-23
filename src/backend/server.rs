@@ -14,6 +14,7 @@ async fn get_db_connection() -> Result<SyncConnectionWrapper<SqliteConnection>, 
     SyncConnectionWrapper::<SqliteConnection>::establish(&database_url).await
 }
 
+#[server]
 async fn create_task(task: String) -> Result<Task, ServerFnError> {
     let mut conn = get_db_connection().await.map_err(|e| ServerFnError::new(format!("Database connection error: {}", e)))?;
 
