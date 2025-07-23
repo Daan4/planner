@@ -1,4 +1,12 @@
 use dioxus::prelude::*;
+use std::sync::{Arc, Mutex};
+
+type RemoveTaskFn = Arc<Mutex<dyn FnMut(String)>>;
+
+#[derive(Clone)]
+struct InboxAppContext {
+    remove_task: Signal<RemoveTaskFn>,
+}
 
 #[component]
 pub fn InboxApp() -> Element {
@@ -12,6 +20,17 @@ pub fn InboxApp() -> Element {
             new_task.set(String::from(""));
         }
     };
+
+    let remove_task = {
+        let mut tasks = tasks.clone();
+        move |task: String| {
+            tasks.write().retain(|t| t != &task);
+        }
+    };
+
+    provide_context(InboxAppContext {
+        remove_task: Signal::new(Arc::new(Mutex::new(remove_task))),
+    });
 
     rsx! {
         div {
@@ -30,6 +49,8 @@ pub fn InboxApp() -> Element {
                     onkeydown: move |evt| {
                         if evt.key() == Key::Enter {
                             add();
+                        } else if evt.key() == Key::Escape {
+                            new_task.set(String::from(""));
                         }
                     }
                 }
@@ -50,7 +71,6 @@ pub fn InboxApp() -> Element {
     }
 }
 
-
 #[derive(PartialEq, Clone)]
 enum ItemState {
     Normal,
@@ -58,13 +78,14 @@ enum ItemState {
     Selected,
 }
 
-
 #[component]
 fn InboxItem(task: String) -> Element {
     let mut state = use_signal(|| ItemState::Normal);
     let mut disabled = use_signal(|| true);
     let mut old_task = use_signal(|| task.clone());
     let mut task = use_signal(|| task.clone());
+    let context = use_context::<InboxAppContext>();
+    let remove_task = context.remove_task.read().clone();
 
     rsx! {
         div {
@@ -81,8 +102,10 @@ fn InboxItem(task: String) -> Element {
                 disabled: "{disabled}",
                 value: "{task}",
                 onmouseenter: move |_| {
-                    state.set(ItemState::Hovered);
-                    disabled.set(false);
+                    if state.read().clone() != ItemState::Selected {
+                        state.set(ItemState::Hovered);
+                        disabled.set(false);
+                    }
                 },
                 onmouseleave: move |_| {
                     if state.read().clone() != ItemState::Selected {
@@ -108,9 +131,7 @@ fn InboxItem(task: String) -> Element {
                         disabled.set(true);
                         task.set(old_task.read().clone());
                     } else if evt.key() == Key::Delete {
-                        task.set(String::from(""));
-                        state.set(ItemState::Normal);
-                        disabled.set(true);
+                       remove_task.lock().unwrap()(task.read().clone());
                     }
                 }
             }
