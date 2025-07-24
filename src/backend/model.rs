@@ -39,7 +39,7 @@ impl FromSql<Text, Sqlite> for Id {
 }
 
 #[cfg_attr(feature = "server", derive(Queryable, Insertable, Selectable))]
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "server", diesel(table_name = tasks))]
 #[cfg_attr(feature = "server", diesel(check_for_backend(diesel::sqlite::Sqlite)))]
 pub struct Task {

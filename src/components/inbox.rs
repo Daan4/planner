@@ -1,35 +1,62 @@
 use dioxus::prelude::*;
 use std::sync::{Arc, Mutex};
+use crate::backend::server;
+use crate::backend::model::{Task, Id};
 
-type RemoveTaskFn = Arc<Mutex<dyn FnMut(String)>>;
+type DeleteTaskFn = Arc<Mutex<dyn FnMut(Id)>>;
 
 #[derive(Clone)]
-struct InboxAppContext {
-    remove_task: Signal<RemoveTaskFn>,
+struct InboxItemListContext {
+    delete_task_fn: Signal<DeleteTaskFn>,
 }
 
 #[component]
 pub fn InboxApp() -> Element {
-    let mut new_task = use_signal(|| String::from(""));
-    let mut tasks: Signal<Vec<String>> = use_signal(|| Vec::new());
+    // State to store the tasks
+    let tasks: Signal<Vec<Task>> = use_signal(|| vec![]);
 
-    let mut add = move || {
-        if !new_task.read().is_empty() {
-            let mut msgs = tasks.write();
-            msgs.push(new_task.read().clone());
-            new_task.set(String::from(""));
-        }
-    };
-
-    let remove_task = {
+    // Fetch tasks once (only when the component is mounted)
+    use_hook(|| {
+        // Clone signal into the hook's closure
         let mut tasks = tasks.clone();
-        move |task: String| {
-            tasks.write().retain(|t| t != &task);
+        spawn(async move {
+            tasks.set(server::get_tasks().await.unwrap()); // Todo Handle error
+        });
+    });
+
+    rsx! {
+        InboxItemList { tasks: tasks.read().clone() }
+    }
+}
+
+#[component]
+fn InboxItemList(tasks: Vec<Task>) -> Element {
+   let mut new_task_content = use_signal(|| String::from(""));
+    let tasks: Signal<Vec<Task>> = use_signal(|| tasks);
+
+    let create_task = move || async move {
+        let mut new_task_content = new_task_content.clone();
+        let mut tasks = tasks.clone();
+        if !new_task_content.read().is_empty() {
+            let task = server::create_task(new_task_content.read().clone()).await.unwrap(); // Todo Handle error
+            tasks.write().push(task);
+            new_task_content.set(String::from(""));
         }
     };
 
-    provide_context(InboxAppContext {
-        remove_task: Signal::new(Arc::new(Mutex::new(remove_task))),
+    // Provide context allowing child items to delete themselves
+    let delete_task_fn = {
+        let tasks = tasks.clone();
+        move |task_id: Id| {
+            let mut tasks = tasks.clone();
+            spawn(async move {
+                server::delete_task(task_id).await.unwrap();
+                tasks.write().retain(|t| t.id != task_id);
+            });
+        }
+    };
+    provide_context(InboxItemListContext {
+        delete_task_fn: Signal::new(Arc::new(Mutex::new(delete_task_fn))),
     });
 
     rsx! {
@@ -44,20 +71,20 @@ pub fn InboxApp() -> Element {
                 input {
                     r#type: "text",
                     placeholder: "Enter a task",
-                    value: "{new_task}",
-                    oninput: move |evt| new_task.set(evt.value()),
+                    value: "{new_task_content}",
+                    oninput: move |evt| new_task_content.set(evt.value()),
                     onkeydown: move |evt| {
                         if evt.key() == Key::Enter {
-                            add();
+                            spawn(create_task());
                         } else if evt.key() == Key::Escape {
-                            new_task.set(String::from(""));
+                            new_task_content.set(String::from(""));
                         }
                     }
                 }
 
                 button {
                     id: "inbox-add-button",
-                    onclick: move |_| add(),
+                    onclick: move |_| create_task(),
                     "Add"
                 }
             }
@@ -79,19 +106,18 @@ enum ItemState {
 }
 
 #[component]
-fn InboxItem(task: String) -> Element {
+fn InboxItem(task: Task) -> Element {
     let mut state = use_signal(|| ItemState::Normal);
     let mut disabled = use_signal(|| true);
-    let mut old_task = use_signal(|| task.clone());
-    let mut task = use_signal(|| task.clone());
-    let context = use_context::<InboxAppContext>();
-    let remove_task = context.remove_task.read().clone();
+    let mut old_content = use_signal(|| task.content.clone());
+    let mut content = use_signal(|| task.content.clone());
+    let context = use_context::<InboxItemListContext>();
+    let delete_task_fn = context.delete_task_fn.read().clone();
 
     rsx! {
         div {
             input {
                 r#type: "text",
-                // Dynamic class based on state
                 class: {
                     match *state.read() {
                         ItemState::Normal => "inbox-item",
@@ -100,7 +126,7 @@ fn InboxItem(task: String) -> Element {
                     }
                 },
                 disabled: "{disabled}",
-                value: "{task}",
+                value: "{content}",
                 onmouseenter: move |_| {
                     if state.read().clone() != ItemState::Selected {
                         state.set(ItemState::Hovered);
@@ -115,23 +141,29 @@ fn InboxItem(task: String) -> Element {
                 },
                 onclick: move |_| {
                     state.set(ItemState::Selected);
-                    old_task.set(task.read().clone());
+                    old_content.set(content.read().clone());
                 },
-                oninput: move |evt| task.set(evt.value()),
+                oninput: move |evt| content.set(evt.value()),
                 onfocusout: move |_| {
                     state.set(ItemState::Normal);
                     disabled.set(true);
                 },
                 onkeydown: move |evt| {
                     if evt.key() == Key::Enter {
+                        spawn(async move {
+                            server::update_task(task.id, content.read().clone()).await.unwrap(); // Todo: Handle error properly
+                        });
                         state.set(ItemState::Normal);
                         disabled.set(true);
                     } else if evt.key() == Key::Escape {
                         state.set(ItemState::Normal);
                         disabled.set(true);
-                        task.set(old_task.read().clone());
+                        content.set(old_content.read().clone());
                     } else if evt.key() == Key::Delete {
-                       remove_task.lock().unwrap()(task.read().clone());
+                        spawn(async move {
+                            server::delete_task(task.id).await.unwrap(); // Todo: Handle error properly
+                        });
+                       delete_task_fn.lock().unwrap()(task.id);
                     }
                 }
             }
