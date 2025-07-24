@@ -1,1 +1,5 @@
-split server and client so that the client is using objects that dont depend on diesel
+switch to using UUID instead of ID auto incrementing
+
+implement add, remove, read throughout application
+
+automated tests where possible. Look into creating fully testing application including hmi
