@@ -45,18 +45,18 @@ pub async fn create_task(task_content: String) -> Result<Task, ServerFnError> {
 }
 
 #[server]
-pub async fn get_task(task_id: Id) -> Result<Task, ServerFnError> {
+pub async fn get_tasks() -> Result<Vec<Task>, ServerFnError> {
     use super::schema::tasks::dsl::*;
 
     let mut conn = get_db_connection().await.map_err(|e| ServerFnError::new(format!("Database connection error: {}", e)))?;
 
-    let task = tasks
-        .filter(id.eq(task_id.0.to_string()))
-        .first::<Task>(&mut conn)
+    let taskvec = tasks
+        .select(Task::as_select())
+        .load(&mut conn)
         .await
         .map_err(|e| ServerFnError::new(format!("Database fetch error: {}", e)))?;
 
-        Ok(task)
+        Ok(taskvec)
 }
 
 #[server]
