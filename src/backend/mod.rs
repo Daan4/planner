@@ -1,6 +1,5 @@
-#[cfg(feature = "server")]
 pub mod model;
+pub mod server;
+
 #[cfg(feature = "server")]
 mod schema;
-#[cfg(feature = "server")]
-pub mod server;

@@ -2,10 +2,10 @@
 
 diesel::table! {
     tasks (id) {
-        id -> Integer,
+        id -> Text,
         content -> Text,
         created_at -> Timestamp,
-        modified_at -> Nullable<Timestamp>,
+        updated_at -> Nullable<Timestamp>,
         deleted_at -> Nullable<Timestamp>,
     }
 }

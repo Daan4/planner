@@ -10,10 +10,11 @@ edition = "2021"
 dioxus = { version = "0.6.3", features = ["fullstack"] }
 chrono = { version = "0.4.41", features = ["serde"] }
 serde = { version = "1.0.219"}
-diesel = { version = "2.2.12", optional = true, features = ["sqlite", "serde_json", "chrono"] }
+diesel = { version = "2.2.12", optional = true, features = ["sqlite", "serde_json", "chrono", "returning_clauses_for_sqlite_3_35"] }
 libsqlite3-sys = { version = "0.35.0", optional = true, features = ["bundled"] }
 dotenvy = { version = "0.15.7", optional = true }
 diesel-async = { version = "0.6.1", optional = true, features = ["sqlite"] }
+uuid = { version = "1.17.0", features = ["v7", "serde", "js"]}
 
 [features]
 web = ["dioxus/web"]

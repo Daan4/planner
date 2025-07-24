@@ -1,13 +1,20 @@
 use dioxus::prelude::*;
+#[cfg(feature = "server")]
 use diesel::prelude::*;
+#[cfg(feature = "server")]
 use diesel_async::{RunQueryDsl, AsyncConnection};
+#[cfg(feature = "server")]
 use diesel_async::sync_connection_wrapper::SyncConnectionWrapper;
-use super::model::Task;
+use super::model::{Task, Id};
+#[cfg(feature = "server")]
 use chrono::Utc;
-use super::schema::tasks;
 use std::env;
+#[cfg(feature = "server")]
 use dotenvy::dotenv;
+#[cfg(feature = "server")]
+use uuid::Uuid;
 
+#[cfg(feature = "server")]
 async fn get_db_connection() -> Result<SyncConnectionWrapper<SqliteConnection>, ConnectionError> {
     dotenv().ok();
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
@@ -15,14 +22,16 @@ async fn get_db_connection() -> Result<SyncConnectionWrapper<SqliteConnection>, 
 }
 
 #[server]
-async fn create_task(task: String) -> Result<Task, ServerFnError> {
+pub async fn create_task(task_content: String) -> Result<Task, ServerFnError> {
+    use super::schema::tasks;
+
     let mut conn = get_db_connection().await.map_err(|e| ServerFnError::new(format!("Database connection error: {}", e)))?;
 
     let new_task = Task {
-        id: 0, // This will be auto-incremented by the database
-        content: task,
+        id: Id(Uuid::now_v7()), // This will be auto-incremented by the database
+        content: task_content,
         created_at: Utc::now().naive_utc(),
-        modified_at: None,
+        updated_at: None,
         deleted_at: None,
     };
 
@@ -33,4 +42,50 @@ async fn create_task(task: String) -> Result<Task, ServerFnError> {
         .map_err(|e| ServerFnError::new(format!("Database insert error: {}", e)))?;
     
     Ok(new_task)
+}
+
+#[server]
+pub async fn get_task(task_id: Id) -> Result<Task, ServerFnError> {
+    use super::schema::tasks::dsl::*;
+
+    let mut conn = get_db_connection().await.map_err(|e| ServerFnError::new(format!("Database connection error: {}", e)))?;
+
+    let task = tasks
+        .filter(id.eq(task_id.0.to_string()))
+        .first::<Task>(&mut conn)
+        .await
+        .map_err(|e| ServerFnError::new(format!("Database fetch error: {}", e)))?;
+
+        Ok(task)
+}
+
+#[server]
+pub async fn update_task(task_id: Id, task_content: String) -> Result<Task, ServerFnError> {
+    use super::schema::tasks::dsl::*;
+
+    let mut conn = get_db_connection().await.map_err(|e| ServerFnError::new(format!("Database connection error: {}", e)))?;
+
+    let task = diesel::update(tasks.find(task_id))
+        .set((content.eq(task_content), updated_at.eq(Utc::now().naive_utc())))
+        .returning(Task::as_returning())
+        .get_result(&mut conn)
+        .await
+        .map_err(|e| ServerFnError::new(format!("Database fetch error: {}", e)))?;
+
+    Ok(task)
+}
+
+#[server]
+pub async fn delete_task(task_id: Id) -> Result<(), ServerFnError> {
+    use super::schema::tasks::dsl::*;
+
+    let mut conn = get_db_connection().await.map_err(|e| ServerFnError::new(format!("Database connection error: {}", e)))?;
+
+    diesel::delete(tasks
+        .filter(id.eq(task_id.0.to_string())))
+        .execute(&mut conn)
+        .await
+        .map_err(|e| ServerFnError::new(format!("Database delete error: {}", e)))?;
+
+    Ok(())
 }
