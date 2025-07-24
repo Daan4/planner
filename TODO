@@ -1,5 +1,7 @@
-switch to using UUID instead of ID auto incrementing
+fix two inbox items being selectable at the same time
 
-implement add, remove, read throughout application
+automated testing of server
 
-automated tests where possible. Look into creating fully testing application including hmi
+automated ui testing
+
+calendar app

@@ -14,8 +14,9 @@ fn InboxItemList() -> Element {
 
     use_hook(|| {
         spawn(async move {
-            if let Ok(fetched) = server::get_tasks().await {
-                tasks.set(fetched);
+            match server::get_tasks().await {
+                Ok(fetched) => tasks.set(fetched),
+                Err(e) => eprintln!("Failed to fetch tasks: {}", e),
             }
         });
     });
@@ -28,9 +29,12 @@ fn InboxItemList() -> Element {
             }
             spawn({
                 async move {
-                    if let Ok(task) = server::create_task(content).await {
-                        tasks.write().push(task);
-                        new_task.set(String::new());
+                    match server::create_task(content).await {
+                        Ok(task) => {
+                            tasks.write().push(task);
+                            new_task.set(String::new());
+                        },
+                        Err(e) => eprintln!("Failed to create task: {}", e),
                     }
                 }
             });
@@ -42,8 +46,9 @@ fn InboxItemList() -> Element {
         move |id: Id| {
             spawn({
                 async move {
-                    if server::delete_task(id).await.is_ok() {
-                        tasks.write().retain(|t| t.id != id);
+                    match server::delete_task(id).await {
+                        Ok(_) => tasks.write().retain(|t| t.id != id),
+                        Err(e) => eprintln!("Failed to delete task: {}", e),
                     }
                 }
             });
@@ -104,7 +109,10 @@ fn InboxItem(task: Task, on_delete: EventHandler<Id>) -> Element {
 
     let update_task = move || {
         spawn(async move {
-            server::update_task(task.id, content.read().clone()).await.unwrap(); // TODO: handle error
+            match server::update_task(task.id, content.read().clone()).await {
+                Ok(_) => {},
+                Err(e) => eprintln!("Failed to update task {}: {}", task.id.0, e),
+            }
         });
     };
 
@@ -138,7 +146,7 @@ fn InboxItem(task: Task, on_delete: EventHandler<Id>) -> Element {
                 old_content.set(content.read().clone());
             },
             oninput: move |evt| content.set(evt.value()),
-            onfocusout: move |_| {
+            onblur: move |_| {
                 if content.read().clone().is_empty() {
                     on_delete.call(task.id);
                 } else if content.read().clone() != old_content.read().clone() {
