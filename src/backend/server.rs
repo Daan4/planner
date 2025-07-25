@@ -15,6 +15,14 @@ use dotenvy::dotenv;
 use uuid::Uuid;
 
 #[cfg(feature = "server")]
+use std::sync::LazyLock;
+#[cfg(feature = "server")]
+use tokio::sync::Mutex;
+
+#[cfg(feature = "server")]
+static DB_MUTEX: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+#[cfg(feature = "server")]
 async fn get_db_connection() -> Result<SyncConnectionWrapper<SqliteConnection>, ConnectionError> {
     dotenv().ok();
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
@@ -25,8 +33,6 @@ async fn get_db_connection() -> Result<SyncConnectionWrapper<SqliteConnection>, 
 pub async fn create_task(task_content: String) -> Result<Task, ServerFnError> {
     use super::schema::tasks;
 
-    let mut conn = get_db_connection().await.map_err(|e| ServerFnError::new(format!("Database connection error: {}", e)))?;
-
     let new_task = Task {
         id: Id(Uuid::now_v7()), // This will be auto-incremented by the database
         content: task_content,
@@ -34,6 +40,9 @@ pub async fn create_task(task_content: String) -> Result<Task, ServerFnError> {
         updated_at: None,
         deleted_at: None,
     };
+
+    let _guard = DB_MUTEX.lock().await;
+    let mut conn = get_db_connection().await.map_err(|e| ServerFnError::new(format!("Database connection error: {}", e)))?;
 
     diesel::insert_into(tasks::table)
         .values(&new_task)
@@ -48,6 +57,7 @@ pub async fn create_task(task_content: String) -> Result<Task, ServerFnError> {
 pub async fn get_tasks() -> Result<Vec<Task>, ServerFnError> {
     use super::schema::tasks::dsl::*;
 
+    let _guard = DB_MUTEX.lock().await;
     let mut conn = get_db_connection().await.map_err(|e| ServerFnError::new(format!("Database connection error: {}", e)))?;
 
     let taskvec = tasks
@@ -63,6 +73,7 @@ pub async fn get_tasks() -> Result<Vec<Task>, ServerFnError> {
 pub async fn update_task(task_id: Id, task_content: String) -> Result<Task, ServerFnError> {
     use super::schema::tasks::dsl::*;
 
+    let _guard = DB_MUTEX.lock().await;
     let mut conn = get_db_connection().await.map_err(|e| ServerFnError::new(format!("Database connection error: {}", e)))?;
 
     let task = diesel::update(tasks.find(task_id))
@@ -79,6 +90,7 @@ pub async fn update_task(task_id: Id, task_content: String) -> Result<Task, Serv
 pub async fn delete_task(task_id: Id) -> Result<(), ServerFnError> {
     use super::schema::tasks::dsl::*;
 
+    let _guard = DB_MUTEX.lock().await;
     let mut conn = get_db_connection().await.map_err(|e| ServerFnError::new(format!("Database connection error: {}", e)))?;
 
     diesel::delete(tasks
