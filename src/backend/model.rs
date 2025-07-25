@@ -44,7 +44,13 @@ impl FromSql<Text, Sqlite> for Id {
 #[cfg_attr(feature = "server", diesel(check_for_backend(diesel::sqlite::Sqlite)))]
 pub struct Task {
     pub id: Id,
-    pub content: String,
+    pub title: String,
+    pub important: bool,
+    pub urgent: bool,
+    pub role: Option<String>,
+    pub content: Option<String>,
+    pub completed: bool,
+    pub scheduled_date: Option<NaiveDateTime>,
     pub created_at: NaiveDateTime,
     pub updated_at: Option<NaiveDateTime>,
     pub deleted_at: Option<NaiveDateTime>,

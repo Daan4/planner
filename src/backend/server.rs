@@ -30,12 +30,18 @@ async fn get_db_connection() -> Result<SyncConnectionWrapper<SqliteConnection>, 
 }
 
 #[server]
-pub async fn create_task(task_content: String) -> Result<Task, ServerFnError> {
+pub async fn create_task(task_title: String) -> Result<Task, ServerFnError> {
     use super::schema::tasks;
 
     let new_task = Task {
         id: Id(Uuid::now_v7()), // This will be auto-incremented by the database
-        content: task_content,
+        title: task_title,
+        important: false,
+        urgent: false,
+        role: None,
+        content: None,
+        completed: false,
+        scheduled_date: None,
         created_at: Utc::now().naive_utc(),
         updated_at: None,
         deleted_at: None,
@@ -62,6 +68,7 @@ pub async fn get_tasks() -> Result<Vec<Task>, ServerFnError> {
 
     let taskvec = tasks
         .select(Task::as_select())
+        .filter(deleted_at.is_null())
         .load(&mut conn)
         .await
         .map_err(|e| ServerFnError::new(format!("Database fetch error: {}", e)))?;
@@ -70,14 +77,14 @@ pub async fn get_tasks() -> Result<Vec<Task>, ServerFnError> {
 }
 
 #[server]
-pub async fn update_task(task_id: Id, task_content: String) -> Result<Task, ServerFnError> {
+pub async fn update_task(task_id: Id, task_title: String) -> Result<Task, ServerFnError> {
     use super::schema::tasks::dsl::*;
 
     let _guard = DB_MUTEX.lock().await;
     let mut conn = get_db_connection().await.map_err(|e| ServerFnError::new(format!("Database connection error: {}", e)))?;
 
     let task = diesel::update(tasks.find(task_id))
-        .set((content.eq(task_content), updated_at.eq(Utc::now().naive_utc())))
+        .set((title.eq(task_title), updated_at.eq(Utc::now().naive_utc())))
         .returning(Task::as_returning())
         .get_result(&mut conn)
         .await
@@ -93,11 +100,25 @@ pub async fn delete_task(task_id: Id) -> Result<(), ServerFnError> {
     let _guard = DB_MUTEX.lock().await;
     let mut conn = get_db_connection().await.map_err(|e| ServerFnError::new(format!("Database connection error: {}", e)))?;
 
-    diesel::delete(tasks
-        .filter(id.eq(task_id.0.to_string())))
-        .execute(&mut conn)
+    diesel::update(tasks.find(task_id))
+        .set(deleted_at.eq(Utc::now().naive_utc()))
+        .returning(Task::as_returning())
+        .get_result(&mut conn)
         .await
-        .map_err(|e| ServerFnError::new(format!("Database delete error: {}", e)))?;
+        .map_err(|e| ServerFnError::new(format!("Database fetch error: {}", e)))?;
 
     Ok(())
+    // fully delete the task
+    // use super::schema::tasks::dsl::*;
+
+    // let _guard = DB_MUTEX.lock().await;
+    // let mut conn = get_db_connection().await.map_err(|e| ServerFnError::new(format!("Database connection error: {}", e)))?;
+
+    // diesel::delete(tasks
+    //     .filter(id.eq(task_id.0.to_string())))
+    //     .execute(&mut conn)
+    //     .await
+    //     .map_err(|e| ServerFnError::new(format!("Database delete error: {}", e)))?;
+
+    // Ok(())
 }

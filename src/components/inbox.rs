@@ -23,13 +23,13 @@ fn InboxItemList() -> Element {
 
     let create_task = {
         move || {
-            let content = new_task.read().clone();
-            if content.is_empty() {
+            let title = new_task.read().clone();
+            if title.is_empty() {
                 return;
             }
             spawn({
                 async move {
-                    match server::create_task(content).await {
+                    match server::create_task(title).await {
                         Ok(task) => {
                             tasks.write().push(task);
                             new_task.set(String::new());
@@ -100,16 +100,16 @@ enum ItemState {
 fn InboxItem(task: Task, on_delete: EventHandler<Id>) -> Element {
     let mut state = use_signal(|| ItemState::Normal);
     let mut disabled = use_signal(|| true);
-    let mut content = use_signal(|| task.content.clone());
-    let mut old_content = use_signal(|| task.content.clone());
+    let mut title = use_signal(|| task.title.clone());
+    let mut old_title = use_signal(|| task.title.clone());
 
     use_effect(move || {
-        content.set(task.content.clone());
+        title.set(task.title.clone());
     });
 
     let update_task = move || {
         spawn(async move {
-            match server::update_task(task.id, content.read().clone()).await {
+            match server::update_task(task.id, title.read().clone()).await {
                 Ok(_) => {},
                 Err(e) => eprintln!("Failed to update task {}: {}", task.id.0, e),
             }
@@ -127,7 +127,7 @@ fn InboxItem(task: Task, on_delete: EventHandler<Id>) -> Element {
             r#type: "text",
             class: "{apply_state_class()}",
             disabled: "{disabled}",
-            value: "{content}",
+            value: "{title}",
 
             onmouseenter: move |_| {
                 if state.read().clone() != ItemState::Selected {
@@ -143,13 +143,13 @@ fn InboxItem(task: Task, on_delete: EventHandler<Id>) -> Element {
             },
             onclick: move |_| {
                 state.set(ItemState::Selected);
-                old_content.set(content.read().clone());
+                old_title.set(title.read().clone());
             },
-            oninput: move |evt| content.set(evt.value()),
+            oninput: move |evt| title.set(evt.value()),
             onblur: move |_| {
-                if content.read().clone().is_empty() {
+                if title.read().clone().is_empty() {
                     on_delete.call(task.id);
-                } else if content.read().clone() != old_content.read().clone() {
+                } else if title.read().clone() != old_title.read().clone() {
                     update_task();
                 }
                 state.set(ItemState::Normal);
@@ -162,7 +162,7 @@ fn InboxItem(task: Task, on_delete: EventHandler<Id>) -> Element {
                     disabled.set(true);
                 },
                 Key::Escape => {
-                    content.set(old_content.read().clone());
+                    title.set(old_title.read().clone());
                     state.set(ItemState::Normal);
                     disabled.set(true);
                 },
