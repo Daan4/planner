@@ -2,12 +2,12 @@
 name = "planner"
 version = "0.1.0"
 authors = ["Daan Lubbers <github.com.fn7i9@alias.daanlubbers.nl>"]
-edition = "2021"
+edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus = { version = "0.6.3", features = ["fullstack"] }
+dioxus = { version = "0.7.0-alpha.3", features = ["fullstack"] }
 chrono = { version = "0.4.41", features = ["serde"] }
 serde = { version = "1.0.219"}
 diesel = { version = "2.2.12", optional = true, features = ["sqlite", "serde_json", "chrono", "returning_clauses_for_sqlite_3_35"] }
@@ -16,6 +16,17 @@ dotenvy = { version = "0.15.7", optional = true }
 diesel-async = { version = "0.6.1", optional = true, features = ["sqlite"] }
 uuid = { version = "1.17.0", features = ["v7", "serde", "js"]}
 tokio = { version = "1.46.1", features = ["sync"], optional = true}
+dioxus-primitives = { git = "https://github.com/DioxusLabs/components" }
+
+[patch.crates-io]
+dioxus-geolocation = { git = "https://github.com/ealmloff/dioxus-std", branch = "0.7" }
+dioxus-notification = { git = "https://github.com/ealmloff/dioxus-std", branch = "0.7" }
+dioxus-sdk = { git = "https://github.com/ealmloff/dioxus-std", branch = "0.7" }
+dioxus_storage = { git = "https://github.com/ealmloff/dioxus-std", branch = "0.7" }
+dioxus-sync = { git = "https://github.com/ealmloff/dioxus-std", branch = "0.7" }
+dioxus-time = { git = "https://github.com/ealmloff/dioxus-std", branch = "0.7" }
+dioxus-util = { git = "https://github.com/ealmloff/dioxus-std", branch = "0.7" }
+dioxus-window = { git = "https://github.com/ealmloff/dioxus-std", branch = "0.7" }
 
 [features]
 web = ["dioxus/web"]

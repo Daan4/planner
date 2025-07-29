@@ -16,3 +16,6 @@
 Cargo.lock
 
 TODO
+
+/node_modules
+package-lock.json

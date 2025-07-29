@@ -4,7 +4,10 @@ use crate::backend::model::{Task, Id};
 
 #[component]
 pub fn InboxApp() -> Element {
-    rsx! { InboxItemList {} }
+    rsx! { 
+        document::Stylesheet { href: asset!("/assets/inbox.css") }
+        InboxItemList {} 
+    }
 }
 
 #[component]
@@ -62,7 +65,9 @@ fn InboxItemList() -> Element {
             h2 { "Inbox" }
 
             div {
+                class: "flex",
                 input {
+                    class: "inbox-input flex-1",
                     r#type: "text",
                     placeholder: "Enter a task",
                     value: "{new_task}",
@@ -73,7 +78,10 @@ fn InboxItemList() -> Element {
                         _ => {}
                     }
                 }
-                button { onclick: move |_| create_task(), "Add" }
+                button { 
+                    class: "inbox-button",
+                    onclick: move |_| create_task(), "Add" 
+                }
             }
 
             div {

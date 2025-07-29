@@ -1,0 +1,54 @@
+.inbox-input {
+    padding: 8px;
+    border: 1px solid #555;
+    border-radius: 4px;
+    background-color: #121212;
+    color: #eee;
+    width: 100%;
+    max-width: 300px;
+    outline: none;
+    transition: border-color 0.2s, background-color 0.2s;
+}
+
+.inbox-input:focus {
+    border-color: #4caf50;
+    background-color: #1a1a1a;
+}
+
+.inbox-button {
+    padding: 8px 12px;
+    margin-left: 8px;
+    border: none;
+    border-radius: 4px;
+    background-color: #4caf50;
+    color: #fff;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.inbox-button:hover {
+    background-color: #45a047;
+}
+
+.inbox-item {
+    padding: 8px;
+    border: 1px solid #444;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background-color: #1e1e1e; /* dark background */
+    color: #eee;               /* light text */
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+.inbox-item.hovered {
+    background-color: #2a2a2a; /* slightly lighter on hover */
+}
+
+.inbox-item.selected {
+    background-color: #3a4d3f; /* soft green highlight */
+    border-color: #4caf50;
+    color: #d0ffd0;
+}
