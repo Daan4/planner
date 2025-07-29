@@ -23,7 +23,7 @@ curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt-get install -y nsolid
 nsolid -v
 npm install tailwindcss @tailwindcss/cli
-npx @tailwindcss/cli -i ./input.css -o ./assets/tailwind.css --watch
+npx @tailwindcss/cli -i ./input.css -o ./assets/tailwind.css
 cargo add dioxus-primitives --git https://github.com/Dioxusabs/components
 ```
 
@@ -43,6 +43,6 @@ dx serve --platform web
 ```
 
 ### CSS
-````bash
-npx @tailwindcss/cli -i ./input.css -o ./assets/tailwind.css --watch
+```bash
+npx @tailwindcss/cli -i ./input.css -o ./assets/tailwind.css
 ```
