@@ -1,4 +1,4 @@
-use chrono::NaiveDateTime;
+use chrono::{NaiveDateTime, NaiveDate};
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "server")]
 use diesel::prelude::*;
@@ -50,7 +50,7 @@ pub struct Task {
     pub role: Option<String>,
     pub content: Option<String>,
     pub completed: bool,
-    pub scheduled_date: Option<NaiveDateTime>,
+    pub scheduled_date: Option<NaiveDate>,
     pub created_at: NaiveDateTime,
     pub updated_at: Option<NaiveDateTime>,
     pub deleted_at: Option<NaiveDateTime>,

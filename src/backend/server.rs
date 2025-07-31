@@ -6,8 +6,7 @@ use diesel_async::{RunQueryDsl, AsyncConnection};
 #[cfg(feature = "server")]
 use diesel_async::sync_connection_wrapper::SyncConnectionWrapper;
 use super::model::{Task, Id};
-#[cfg(feature = "server")]
-use chrono::Utc;
+use chrono::{Utc, NaiveDate};
 use std::env;
 #[cfg(feature = "server")]
 use dotenvy::dotenv;
@@ -30,10 +29,10 @@ async fn get_db_connection() -> Result<SyncConnectionWrapper<SqliteConnection>, 
 }
 
 #[server]
-pub async fn create_task(task_title: String) -> Result<Task, ServerFnError> {
+pub async fn create_task(task_title: String, date: Option<NaiveDate>) -> Result<Task, ServerFnError> {
     use super::schema::tasks;
 
-    let new_task = Task {
+    let mut new_task = Task {
         id: Id(Uuid::now_v7()), // This will be auto-incremented by the database
         title: task_title,
         important: false,
@@ -46,6 +45,10 @@ pub async fn create_task(task_title: String) -> Result<Task, ServerFnError> {
         updated_at: None,
         deleted_at: None,
     };
+
+    if let Some(date) = date {
+        new_task.scheduled_date = Some(date);
+    }
 
     let _guard = DB_MUTEX.lock().await;
     let mut conn = get_db_connection().await.map_err(|e| ServerFnError::new(format!("Database connection error: {}", e)))?;
@@ -60,20 +63,35 @@ pub async fn create_task(task_title: String) -> Result<Task, ServerFnError> {
 }
 
 #[server]
-pub async fn get_tasks() -> Result<Vec<Task>, ServerFnError> {
+pub async fn get_tasks(date: Option<NaiveDate>) -> Result<Vec<Task>, ServerFnError> {
     use super::schema::tasks::dsl::*;
 
     let _guard = DB_MUTEX.lock().await;
     let mut conn = get_db_connection().await.map_err(|e| ServerFnError::new(format!("Database connection error: {}", e)))?;
 
-    let taskvec = tasks
-        .select(Task::as_select())
-        .filter(deleted_at.is_null())
-        .load(&mut conn)
-        .await
-        .map_err(|e| ServerFnError::new(format!("Database fetch error: {}", e)))?;
+    match date {
+        Some(date) => {
+            let taskvec = tasks
+                .select(Task::as_select())
+                .filter(deleted_at.is_null().and(scheduled_date.eq(date)))
+                .load(&mut conn)
+                .await
+                .map_err(|e| ServerFnError::new(format!("Database fetch error: {}", e)))?;
 
-        Ok(taskvec)
+            Ok(taskvec)
+        },
+        None => {
+            let taskvec = tasks
+                .select(Task::as_select())
+                .filter(deleted_at.is_null())
+                .load(&mut conn)
+                .await
+                .map_err(|e| ServerFnError::new(format!("Database fetch error: {}", e)))?;
+
+            Ok(taskvec)
+        }
+    }
+
 }
 
 #[server]
@@ -108,7 +126,7 @@ pub async fn delete_task(task_id: Id) -> Result<(), ServerFnError> {
         .map_err(|e| ServerFnError::new(format!("Database fetch error: {}", e)))?;
 
     Ok(())
-    // fully delete the task
+    // fully delete the task example
     // use super::schema::tasks::dsl::*;
 
     // let _guard = DB_MUTEX.lock().await;

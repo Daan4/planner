@@ -17,7 +17,7 @@ fn InboxItemList() -> Element {
 
     use_hook(|| {
         spawn(async move {
-            match server::get_tasks().await {
+            match server::get_tasks(None).await {
                 Ok(fetched) => tasks.set(fetched),
                 Err(e) => eprintln!("Failed to fetch tasks: {}", e),
             }
@@ -32,7 +32,7 @@ fn InboxItemList() -> Element {
             }
             spawn({
                 async move {
-                    match server::create_task(title).await {
+                    match server::create_task(title, None).await {
                         Ok(task) => {
                             tasks.write().push(task);
                             new_task.set(String::new());

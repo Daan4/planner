@@ -9,7 +9,7 @@ diesel::table! {
         role -> Nullable<Text>,
         content -> Nullable<Text>,
         completed -> Bool,
-        scheduled_date -> Nullable<Timestamp>,
+        scheduled_date -> Nullable<Date>,
         created_at -> Timestamp,
         updated_at -> Nullable<Timestamp>,
         deleted_at -> Nullable<Timestamp>,
