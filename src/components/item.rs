@@ -2,6 +2,10 @@ use dioxus::prelude::*;
 use crate::backend::server;
 use chrono::NaiveDate;
 use crate::backend::model::{Task, Id};
+use std::sync::Mutex;
+
+static DRAGGING_ITEM: GlobalSignal<Option<Task>> = Signal::global(|| None);
+static DROPPED_ITEM: GlobalSignal<Mutex<Option<Task>>> = Signal::global(|| Mutex::new(None));
 
 #[component]
 pub fn ItemList(day: Option<NaiveDate>) -> Element {
@@ -50,11 +54,24 @@ pub fn ItemList(day: Option<NaiveDate>) -> Element {
         }
     };
 
+    let update_task_fn = move |task: Task| {
+        spawn(async move {
+            let id = task.id.0;
+            match server::update_task(task).await {
+                Ok(_) => {},
+                Err(e) => eprintln!("Failed to update task {}: {}", id, e),
+            }
+        });
+    };
+
+    // Only visually removes the task from the list, used to hide an item after dragging
+    let remove_task_fn = move |id: Id| {
+        tasks.write().retain(|t| t.id != id);
+    };
+
     rsx! {
         div {
             class: "inbox-component",
-
-            h2 { "Inbox" }
 
             div {
                 class: "flex",
@@ -77,11 +94,26 @@ pub fn ItemList(day: Option<NaiveDate>) -> Element {
             }
 
             div {
+                class: "p-4 border border-zinc-700 rounded w-1/2 bg-zinc-800 shadow-md",
+                ondragover: move |e| e.prevent_default(),
+                ondrop: move |_| {
+                    if let Some(mut task) = DRAGGING_ITEM.read().clone() {
+                        if task.scheduled_date != day {
+                            task.scheduled_date = day;
+                            let t = task.clone();
+                            spawn(async move {server::update_task(t).await.unwrap();});
+                        }
+                        tasks.write().push(task.clone());
+                        *DRAGGING_ITEM.write() = Some(task.clone());
+                    }
+                },
                 for task in tasks.read().clone().iter() {
-                    ScheduleItem {
+                    Item {
                         key: "{task.id.0}",
                         task: task.clone(),
-                        on_delete: delete_task_fn.clone()
+                        on_delete: delete_task_fn.clone(),
+                        on_update: update_task_fn.clone(),
+                        on_remove: remove_task_fn.clone(),
                     }
                 }
             }
@@ -97,24 +129,25 @@ enum ItemState {
 }
 
 #[component]
-fn ScheduleItem(task: Task, on_delete: EventHandler<Id>) -> Element {
+fn Item(task: Task, on_delete: EventHandler<Id>, on_update: EventHandler<Task>, on_remove: EventHandler<Id>) -> Element {
     let mut state = use_signal(|| ItemState::Normal);
     let mut disabled = use_signal(|| true);
     let mut title = use_signal(|| task.title.clone());
     let mut old_title = use_signal(|| task.title.clone());
 
+    // Prevent moving task into closure
+    let t = task.clone();
     use_effect(move || {
-        title.set(task.title.clone());
+        title.set(t.title.clone());
     });
 
-    let update_task = move || {
-        spawn(async move {
-            match server::update_task(task.id, title.read().clone()).await {
-                Ok(_) => {},
-                Err(e) => eprintln!("Failed to update task {}: {}", task.id.0, e),
+    use_effect(move || {
+        if let Some(t) = DROPPED_ITEM.read().lock().unwrap().clone() {
+            if t.id == task.id {
+                on_remove.call(t.id);
             }
-        });
-    };
+        }
+    });
 
     let apply_state_class = || match state.read().clone() {
         ItemState::Normal => "inbox-item",
@@ -128,6 +161,7 @@ fn ScheduleItem(task: Task, on_delete: EventHandler<Id>) -> Element {
             class: "{apply_state_class()}",
             disabled: "{disabled}",
             value: "{title}",
+            draggable: "true",
 
             onmouseenter: move |_| {
                 if state.read().clone() != ItemState::Selected {
@@ -146,18 +180,25 @@ fn ScheduleItem(task: Task, on_delete: EventHandler<Id>) -> Element {
                 old_title.set(title.read().clone());
             },
             oninput: move |evt| title.set(evt.value()),
-            onblur: move |_| {
-                if title.read().clone().is_empty() {
-                    on_delete.call(task.id);
-                } else if title.read().clone() != old_title.read().clone() {
-                    update_task();
+            onblur: {
+                let mut task = task.clone();
+                move |_| {
+                    if title.read().clone().is_empty() {
+                        on_delete.call(task.id);
+                    } else if title.read().clone() != old_title.read().clone() {
+                        task.title = title.read().clone();
+                        on_update.call(task.clone());
+                    }
+                    state.set(ItemState::Normal);
+                    disabled.set(true);
                 }
-                state.set(ItemState::Normal);
-                disabled.set(true);
             },
-            onkeydown: move |evt| match evt.key() {
+            onkeydown: {
+                let mut task = task.clone();
+                move |evt| match evt.key() {
                 Key::Enter => {
-                    update_task();
+                    task.title = title.read().clone();
+                    on_update.call(task.clone());
                     state.set(ItemState::Normal);
                     disabled.set(true);
                 },
@@ -168,6 +209,9 @@ fn ScheduleItem(task: Task, on_delete: EventHandler<Id>) -> Element {
                 },
                 Key::Delete => on_delete.call(task.id),
                 _ => {}
+            }},
+            ondragstart: move |_| {
+                *DRAGGING_ITEM.write() = Some(task.clone());
             }
         }
     }

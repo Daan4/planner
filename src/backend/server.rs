@@ -83,7 +83,7 @@ pub async fn get_tasks(date: Option<NaiveDate>) -> Result<Vec<Task>, ServerFnErr
         None => {
             let taskvec = tasks
                 .select(Task::as_select())
-                .filter(deleted_at.is_null())
+                .filter(deleted_at.is_null().and(scheduled_date.is_null()))
                 .load(&mut conn)
                 .await
                 .map_err(|e| ServerFnError::new(format!("Database fetch error: {}", e)))?;
@@ -95,14 +95,22 @@ pub async fn get_tasks(date: Option<NaiveDate>) -> Result<Vec<Task>, ServerFnErr
 }
 
 #[server]
-pub async fn update_task(task_id: Id, task_title: String) -> Result<Task, ServerFnError> {
+pub async fn update_task(new_task: Task) -> Result<Task, ServerFnError> {
     use super::schema::tasks::dsl::*;
 
     let _guard = DB_MUTEX.lock().await;
     let mut conn = get_db_connection().await.map_err(|e| ServerFnError::new(format!("Database connection error: {}", e)))?;
 
-    let task = diesel::update(tasks.find(task_id))
-        .set((title.eq(task_title), updated_at.eq(Utc::now().naive_utc())))
+    let task = diesel::update(tasks.find(new_task.id))
+        .set((
+            title.eq(new_task.title), 
+            important.eq(new_task.important),
+            urgent.eq(new_task.urgent),
+            role.eq(new_task.role),
+            content.eq(new_task.content),
+            completed.eq(new_task.completed),
+            scheduled_date.eq(new_task.scheduled_date),
+            updated_at.eq(Utc::now().naive_utc())))
         .returning(Task::as_returning())
         .get_result(&mut conn)
         .await
