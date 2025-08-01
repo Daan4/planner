@@ -17,10 +17,10 @@ pub fn ScheduleApp() -> Element {
 
             div {
                 class: "w-fit", // prevents stretching
+                "Week {week_nr}",
                 DatePicker {
                     on_selection_change: move |date| selected_date.set(date)
                 },
-                "Week {week_nr}",
             }
 
             div {
@@ -53,7 +53,7 @@ fn DailySchedule(day: NaiveDate) -> Element {
     rsx! {
         div {
             class: "flex-1 border border-gray-400 bg-gray-100 text-center p-4",
-            "Schedule for {day.weekday()} {day}",
+            "{day.weekday()} {day}",
             ItemList{ day }
         }
     }}

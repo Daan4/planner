@@ -2,10 +2,9 @@ use dioxus::prelude::*;
 use crate::backend::server;
 use chrono::NaiveDate;
 use crate::backend::model::{Task, Id};
-use std::sync::Mutex;
 
 static DRAGGING_ITEM: GlobalSignal<Option<Task>> = Signal::global(|| None);
-static DROPPED_ITEM: GlobalSignal<Mutex<Option<Task>>> = Signal::global(|| Mutex::new(None));
+static DROPPED_ITEM: GlobalSignal<Option<Task>> = Signal::global(|| None);
 
 #[component]
 pub fn ItemList(day: Option<NaiveDate>) -> Element {
@@ -64,10 +63,12 @@ pub fn ItemList(day: Option<NaiveDate>) -> Element {
         });
     };
 
-    // Only visually removes the task from the list, used to hide an item after dragging
-    let remove_task_fn = move |id: Id| {
-        tasks.write().retain(|t| t.id != id);
-    };
+   use_effect(move || {
+        if let Some(task) = DROPPED_ITEM.read().clone() {
+            // I want to throw out the task matching id, only when its schedule date does not match the lists date
+            tasks.write().retain(|t| !(t.id == task.id && task.scheduled_date != day));
+        }
+    });
 
     rsx! {
         div {
@@ -102,9 +103,9 @@ pub fn ItemList(day: Option<NaiveDate>) -> Element {
                             task.scheduled_date = day;
                             let t = task.clone();
                             spawn(async move {server::update_task(t).await.unwrap();});
+                            tasks.write().push(task.clone());
+                            *DROPPED_ITEM.write() = Some(task.clone());
                         }
-                        tasks.write().push(task.clone());
-                        *DRAGGING_ITEM.write() = Some(task.clone());
                     }
                 },
                 for task in tasks.read().clone().iter() {
@@ -113,7 +114,6 @@ pub fn ItemList(day: Option<NaiveDate>) -> Element {
                         task: task.clone(),
                         on_delete: delete_task_fn.clone(),
                         on_update: update_task_fn.clone(),
-                        on_remove: remove_task_fn.clone(),
                     }
                 }
             }
@@ -129,7 +129,7 @@ enum ItemState {
 }
 
 #[component]
-fn Item(task: Task, on_delete: EventHandler<Id>, on_update: EventHandler<Task>, on_remove: EventHandler<Id>) -> Element {
+fn Item(task: Task, on_delete: EventHandler<Id>, on_update: EventHandler<Task>) -> Element {
     let mut state = use_signal(|| ItemState::Normal);
     let mut disabled = use_signal(|| true);
     let mut title = use_signal(|| task.title.clone());
@@ -139,14 +139,6 @@ fn Item(task: Task, on_delete: EventHandler<Id>, on_update: EventHandler<Task>, 
     let t = task.clone();
     use_effect(move || {
         title.set(t.title.clone());
-    });
-
-    use_effect(move || {
-        if let Some(t) = DROPPED_ITEM.read().lock().unwrap().clone() {
-            if t.id == task.id {
-                on_remove.call(t.id);
-            }
-        }
     });
 
     let apply_state_class = || match state.read().clone() {
