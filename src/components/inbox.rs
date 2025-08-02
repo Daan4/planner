@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 use super::item::ItemList;
+use crate::backend::model::TaskFilter;
 
 #[component]
 pub fn InboxApp() -> Element {
@@ -8,7 +9,7 @@ pub fn InboxApp() -> Element {
         div {
             class: "flex-1 border border-gray-400 bg-gray-100 text-center p-4",
             "Inbox",
-            ItemList { day: None } 
+            ItemList { filter: TaskFilter {scheduled_date: None, backlog_id: None} } 
         }
     }
 }

@@ -1,18 +1,19 @@
 use dioxus::prelude::*;
 use crate::backend::server;
-use chrono::NaiveDate;
-use crate::backend::model::{Task, Id};
+use crate::backend::model::{Task, Id, TaskFilter};
 
 static DRAGGING_ITEM: GlobalSignal<Option<Task>> = Signal::global(|| None);
 static DROPPED_ITEM: GlobalSignal<Option<Task>> = Signal::global(|| None);
 
 #[component]
-pub fn ItemList(day: Option<NaiveDate>) -> Element {
+pub fn ItemList(filter: TaskFilter) -> Element {
     let mut new_task = use_signal(|| String::new());
     let mut tasks = use_signal(|| vec![]);
+    let day = filter.scheduled_date;
+    let backlog_id = filter.backlog_id;
     use_hook(|| {
         spawn(async move {
-            match server::get_tasks(day).await {
+            match server::get_tasks(filter).await {
                 Ok(fetched) => tasks.set(fetched),
                 Err(e) => eprintln!("Failed to fetch tasks: {}", e),
             }
@@ -27,7 +28,7 @@ pub fn ItemList(day: Option<NaiveDate>) -> Element {
             }
             spawn({
                 async move {
-                    match server::create_task(title, day).await {
+                    match server::create_task(title, day, backlog_id).await {
                         Ok(task) => {
                             tasks.write().push(task);
                             new_task.set(String::new());
@@ -65,8 +66,7 @@ pub fn ItemList(day: Option<NaiveDate>) -> Element {
 
    use_effect(move || {
         if let Some(task) = DROPPED_ITEM.read().clone() {
-            // I want to throw out the task matching id, only when its schedule date does not match the lists date
-            tasks.write().retain(|t| !(t.id == task.id && task.scheduled_date != day));
+            tasks.write().retain(|t| !(t.id == task.id && (task.scheduled_date != day || task.backlog_id != backlog_id)));
         }
     });
 
@@ -101,6 +101,12 @@ pub fn ItemList(day: Option<NaiveDate>) -> Element {
                     if let Some(mut task) = DRAGGING_ITEM.read().clone() {
                         if task.scheduled_date != day {
                             task.scheduled_date = day;
+                            let t = task.clone();
+                            spawn(async move {server::update_task(t).await.unwrap();});
+                            tasks.write().push(task.clone());
+                            *DROPPED_ITEM.write() = Some(task.clone());
+                        } else if task.backlog_id != backlog_id {
+                            task.backlog_id = backlog_id;
                             let t = task.clone();
                             spawn(async move {server::update_task(t).await.unwrap();});
                             tasks.write().push(task.clone());
@@ -207,4 +213,9 @@ fn Item(task: Task, on_delete: EventHandler<Id>, on_update: EventHandler<Task>) 
             }
         }
     }
+}
+
+#[component]
+pub fn ItemManager() -> Element {
+    todo!()
 }

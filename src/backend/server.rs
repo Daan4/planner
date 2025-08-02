@@ -30,7 +30,7 @@ async fn get_db_connection() -> Result<SyncConnectionWrapper<SqliteConnection>, 
 }
 
 #[server]
-pub async fn create_task(title: String, date: Option<NaiveDate>) -> Result<Task, ServerFnError> {
+pub async fn create_task(title: String, date: Option<NaiveDate>, backlog_id: Option<Id>) -> Result<Task, ServerFnError> {
     use super::schema::tasks;
 
     let mut new_task = Task {
@@ -51,6 +51,9 @@ pub async fn create_task(title: String, date: Option<NaiveDate>) -> Result<Task,
     if let Some(date) = date {
         new_task.scheduled_date = Some(date);
     }
+    if let Some(backlog_id) = backlog_id {
+        new_task.backlog_id = Some(backlog_id);
+    }
 
     let _guard = DB_MUTEX.lock().await;
     let mut conn = get_db_connection().await.map_err(|e| ServerFnError::new(format!("Database connection error: {}", e)))?;
@@ -65,13 +68,13 @@ pub async fn create_task(title: String, date: Option<NaiveDate>) -> Result<Task,
 }
 
 #[server]
-pub async fn get_tasks(date: Option<NaiveDate>) -> Result<Vec<Task>, ServerFnError> {
+pub async fn get_tasks(filter: TaskFilter) -> Result<Vec<Task>, ServerFnError> {
     use super::schema::tasks::dsl::*;
 
     let _guard = DB_MUTEX.lock().await;
     let mut conn = get_db_connection().await.map_err(|e| ServerFnError::new(format!("Database connection error: {}", e)))?;
 
-    match date {
+    match filter.scheduled_date {
         Some(date) => {
             let taskvec = tasks
                 .select(Task::as_select())

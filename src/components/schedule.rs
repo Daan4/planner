@@ -2,6 +2,7 @@ use dioxus::prelude::*;
 
 use chrono::{Datelike, Utc, NaiveDate, Weekday, Days};
 use super::item::ItemList;
+use crate::backend::model::TaskFilter;
 use super::calendar::DatePicker;
 
 #[component]
@@ -10,7 +11,7 @@ pub fn ScheduleApp() -> Element {
     let week_nr = use_memo(move || selected_date.read().iso_week().week());
 
     rsx! {
-        document::Stylesheet { href: asset!("/assets/schedule.css") }
+        document::Stylesheet { href: asset!("/assets/calendar.css") }
 
         div {
             class: "p-4 flex flex-col gap-4",
@@ -54,6 +55,6 @@ fn DailySchedule(day: NaiveDate) -> Element {
         div {
             class: "flex-1 border border-gray-400 bg-gray-100 text-center p-4",
             "{day.weekday()} {day}",
-            ItemList{ day }
+            ItemList{ filter: TaskFilter {scheduled_date: Some(day), backlog_id: None} }
         }
     }}

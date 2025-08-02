@@ -57,6 +57,12 @@ pub struct Task {
     pub deleted_at: Option<NaiveDateTime>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct TaskFilter {
+    pub scheduled_date: Option<NaiveDate>,
+    pub backlog_id: Option<Id>,
+}
+
 #[cfg_attr(feature = "server", derive(Queryable, Insertable, Selectable))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "server", diesel(table_name = backlogs))]
