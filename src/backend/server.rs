@@ -5,14 +5,15 @@ use diesel::prelude::*;
 use diesel_async::{RunQueryDsl, AsyncConnection};
 #[cfg(feature = "server")]
 use diesel_async::sync_connection_wrapper::SyncConnectionWrapper;
-use super::model::{Task, Id};
-use chrono::{Utc, NaiveDate};
+use super::model::*;
+#[cfg(feature = "server")]
+use chrono::Utc;
+use chrono::NaiveDate;
 use std::env;
 #[cfg(feature = "server")]
 use dotenvy::dotenv;
 #[cfg(feature = "server")]
 use uuid::Uuid;
-
 #[cfg(feature = "server")]
 use std::sync::LazyLock;
 #[cfg(feature = "server")]
@@ -29,17 +30,18 @@ async fn get_db_connection() -> Result<SyncConnectionWrapper<SqliteConnection>, 
 }
 
 #[server]
-pub async fn create_task(task_title: String, date: Option<NaiveDate>) -> Result<Task, ServerFnError> {
+pub async fn create_task(title: String, date: Option<NaiveDate>) -> Result<Task, ServerFnError> {
     use super::schema::tasks;
 
     let mut new_task = Task {
-        id: Id(Uuid::now_v7()), // This will be auto-incremented by the database
-        title: task_title,
+        id: Id(Uuid::now_v7()),
+        title: title,
         important: false,
         urgent: false,
-        role: None,
         content: None,
         completed: false,
+        role_id: None,
+        backlog_id: None,
         scheduled_date: None,
         created_at: Utc::now().naive_utc(),
         updated_at: None,
@@ -58,7 +60,7 @@ pub async fn create_task(task_title: String, date: Option<NaiveDate>) -> Result<
         .execute(&mut conn)
         .await
         .map_err(|e| ServerFnError::new(format!("Database insert error: {}", e)))?;
-    
+
     Ok(new_task)
 }
 
@@ -95,21 +97,22 @@ pub async fn get_tasks(date: Option<NaiveDate>) -> Result<Vec<Task>, ServerFnErr
 }
 
 #[server]
-pub async fn update_task(new_task: Task) -> Result<Task, ServerFnError> {
+pub async fn update_task(task: Task) -> Result<Task, ServerFnError> {
     use super::schema::tasks::dsl::*;
 
     let _guard = DB_MUTEX.lock().await;
     let mut conn = get_db_connection().await.map_err(|e| ServerFnError::new(format!("Database connection error: {}", e)))?;
 
-    let task = diesel::update(tasks.find(new_task.id))
+    let task = diesel::update(tasks.find(task.id))
         .set((
-            title.eq(new_task.title), 
-            important.eq(new_task.important),
-            urgent.eq(new_task.urgent),
-            role.eq(new_task.role),
-            content.eq(new_task.content),
-            completed.eq(new_task.completed),
-            scheduled_date.eq(new_task.scheduled_date),
+            title.eq(task.title), 
+            important.eq(task.important),
+            urgent.eq(task.urgent),
+            content.eq(task.content),
+            completed.eq(task.completed),
+            role_id.eq(task.role_id),
+            backlog_id.eq(task.backlog_id),
+            scheduled_date.eq(task.scheduled_date),
             updated_at.eq(Utc::now().naive_utc())))
         .returning(Task::as_returning())
         .get_result(&mut conn)
@@ -134,17 +137,143 @@ pub async fn delete_task(task_id: Id) -> Result<(), ServerFnError> {
         .map_err(|e| ServerFnError::new(format!("Database fetch error: {}", e)))?;
 
     Ok(())
-    // fully delete the task example
-    // use super::schema::tasks::dsl::*;
+}
 
-    // let _guard = DB_MUTEX.lock().await;
-    // let mut conn = get_db_connection().await.map_err(|e| ServerFnError::new(format!("Database connection error: {}", e)))?;
+#[server]
+pub async fn create_backlog(name: String) -> Result<Backlog, ServerFnError> {
+    use super::schema::backlogs;
 
-    // diesel::delete(tasks
-    //     .filter(id.eq(task_id.0.to_string())))
-    //     .execute(&mut conn)
-    //     .await
-    //     .map_err(|e| ServerFnError::new(format!("Database delete error: {}", e)))?;
+    let new_backlog = Backlog {
+        id: Id(Uuid::now_v7()),
+        name
+    };
 
-    // Ok(())
+    let _guard = DB_MUTEX.lock().await;
+    let mut conn = get_db_connection().await.map_err(|e| ServerFnError::new(format!("Database connection error: {}", e)))?;
+
+    diesel::insert_into(backlogs::table)
+        .values(&new_backlog)
+        .execute(&mut conn)
+        .await
+        .map_err(|e| ServerFnError::new(format!("Database insert error: {}", e)))?;
+    Ok(new_backlog)
+}
+
+#[server]
+pub async fn get_backlogs() -> Result<Vec<Backlog>, ServerFnError> {
+    use super::schema::backlogs::dsl::*;
+
+    let _guard = DB_MUTEX.lock().await;
+    let mut conn = get_db_connection().await.map_err(|e| ServerFnError::new(format!("Database connection error: {}", e)))?;
+
+    let backlogvec = backlogs
+        .select(Backlog::as_select())
+        .load(&mut conn)
+        .await
+        .map_err(|e| ServerFnError::new(format!("Database fetch error: {}", e)))?;
+
+    Ok(backlogvec)
+}
+
+#[server]
+pub async fn update_backlog(backlog: Backlog) -> Result<(), ServerFnError> {
+    use super::schema::backlogs::dsl::*;
+
+    let _guard = DB_MUTEX.lock().await;
+    let mut conn = get_db_connection().await.map_err(|e| ServerFnError::new(format!("Database connection error: {}", e)))?;
+
+    diesel::update(backlogs.find(backlog.id))
+        .set(name.eq(backlog.name))
+        .returning(Backlog::as_returning())
+        .get_result(&mut conn)
+        .await
+        .map_err(|e| ServerFnError::new(format!("Database fetch error: {}", e)))?;
+
+    Ok(())
+}
+
+#[server]
+pub async fn delete_backlog(backlog_id: Id) -> Result<(), ServerFnError> {
+    use super::schema::backlogs::dsl::*;
+
+    let _guard = DB_MUTEX.lock().await;
+    let mut conn = get_db_connection().await.map_err(|e| ServerFnError::new(format!("Database connection error: {}", e)))?;
+
+    diesel::delete(backlogs
+        .filter(id.eq(backlog_id.0.to_string())))
+        .execute(&mut conn)
+        .await
+        .map_err(|e| ServerFnError::new(format!("Database delete error: {}", e)))?;
+
+    Ok(())
+}
+
+
+#[server]
+pub async fn create_role(name: String) -> Result<Role, ServerFnError> {
+    use super::schema::roles;
+
+    let new_role = Role {
+        id: Id(Uuid::now_v7()),
+        name
+    };
+
+    let _guard = DB_MUTEX.lock().await;
+    let mut conn = get_db_connection().await.map_err(|e| ServerFnError::new(format!("Database connection error: {}", e)))?;
+
+    diesel::insert_into(roles::table)
+        .values(&new_role)
+        .execute(&mut conn)
+        .await
+        .map_err(|e| ServerFnError::new(format!("Database insert error: {}", e)))?;
+    Ok(new_role)
+}
+
+#[server]
+pub async fn get_roles() -> Result<Vec<Role>, ServerFnError> {
+    use super::schema::roles::dsl::*;
+
+    let _guard = DB_MUTEX.lock().await;
+    let mut conn = get_db_connection().await.map_err(|e| ServerFnError::new(format!("Database connection error: {}", e)))?;
+
+    let rolesvec = roles
+        .select(Role::as_select())
+        .load(&mut conn)
+        .await
+        .map_err(|e| ServerFnError::new(format!("Database fetch error: {}", e)))?;
+
+    Ok(rolesvec)
+}
+
+#[server]
+pub async fn update_role(role: Role) -> Result<(), ServerFnError> {
+    use super::schema::roles::dsl::*;
+
+    let _guard = DB_MUTEX.lock().await;
+    let mut conn = get_db_connection().await.map_err(|e| ServerFnError::new(format!("Database connection error: {}", e)))?;
+
+    diesel::update(roles.find(role.id))
+        .set(name.eq(role.name))
+        .returning(Role::as_returning())
+        .get_result(&mut conn)
+        .await
+        .map_err(|e| ServerFnError::new(format!("Database fetch error: {}", e)))?;
+
+    Ok(())
+}
+
+#[server]
+pub async fn delete_role(role_id: Id) -> Result<(), ServerFnError> {
+    use super::schema::roles::dsl::*;
+
+    let _guard = DB_MUTEX.lock().await;
+    let mut conn = get_db_connection().await.map_err(|e| ServerFnError::new(format!("Database connection error: {}", e)))?;
+
+    diesel::delete(roles
+        .filter(id.eq(role_id.0.to_string())))
+        .execute(&mut conn)
+        .await
+        .map_err(|e| ServerFnError::new(format!("Database delete error: {}", e)))?;
+
+    Ok(())
 }

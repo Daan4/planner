@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS `tasks`;
+DROP TABLE IF EXISTS `backlogs`;
+DROP TABLE IF EXISTS `roles`;

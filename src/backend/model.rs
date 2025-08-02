@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "server")]
 use diesel::prelude::*;
 #[cfg(feature = "server")]
-use super::schema::tasks;
+use super::schema::*;
 use uuid::Uuid;
 #[cfg(feature = "server")]
 use diesel::deserialize::FromSql;
@@ -47,11 +47,30 @@ pub struct Task {
     pub title: String,
     pub important: bool,
     pub urgent: bool,
-    pub role: Option<String>,
     pub content: Option<String>,
     pub completed: bool,
+    pub role_id: Option<Id>,
+    pub backlog_id: Option<Id>,
     pub scheduled_date: Option<NaiveDate>,
     pub created_at: NaiveDateTime,
     pub updated_at: Option<NaiveDateTime>,
     pub deleted_at: Option<NaiveDateTime>,
+}
+
+#[cfg_attr(feature = "server", derive(Queryable, Insertable, Selectable))]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "server", diesel(table_name = backlogs))]
+#[cfg_attr(feature = "server", diesel(check_for_backend(diesel::sqlite::Sqlite)))]
+pub struct Backlog {
+    pub id: Id,
+    pub name: String,
+}
+
+#[cfg_attr(feature = "server", derive(Queryable, Insertable, Selectable))]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "server", diesel(table_name = roles))]
+#[cfg_attr(feature = "server", diesel(check_for_backend(diesel::sqlite::Sqlite)))]
+pub struct Role {
+    pub id: Id,
+    pub name: String,
 }
